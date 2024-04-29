@@ -1,0 +1,13 @@
+*.pyc
+
+data/
+
+ckpt/
+
+build/
+
+demo/
+
+outputs/
+
+pypcd/
