@@ -58,6 +58,8 @@ def main(args: Namespace) -> None:
 
     # =================================================================
     # Read sweep_imgs
+    img_path = os.path.join('data/dair-v2x-i/image', '000018.jpg')
+    img = Image.open(img_path) 
     resize = 0.8
     resize_dims = (1536, 864)
     crop = (0, 0, 1536, 864)
@@ -67,16 +69,17 @@ def main(args: Namespace) -> None:
     img_std = np.array(img_conf['img_std'])
     to_rgb = True
 
-    img1, ida_mat = img_transform(
-                        img1,
+    img, ida_mat = img_transform(
+                        img,
                         resize=resize,
                         resize_dims=resize_dims,
                         crop=crop,
                         flip=flip,
                         rotate=rotate_ida,
                     )
-    img1 = mmcv.imnormalize(np.array(img1), img_mean, img_std, to_rgb)
-    img1 = torch.from_numpy(img1).permute(2, 0, 1)
+    img = mmcv.imnormalize(np.array(img), img_mean, img_std, to_rgb)
+    img = torch.from_numpy(img).permute(2, 0, 1)
+    sweep_imgs[0, 0, 0, :] = img
 
     # =================================================================
     # Set mats
@@ -114,11 +117,6 @@ def main(args: Namespace) -> None:
 
     # =================================================================
     # Set img_metas
-
-    # =================================================================
-    # Set calib/virtuallidar_to_camera
-
-
     # img_metas[1]['token'] = f'image/{custom_img_name}.png'
 
     # Input:
@@ -172,9 +170,7 @@ def main(args: Namespace) -> None:
             results = json.load(fp)["results"]
         for sample_token in tqdm(results.keys()):
             sample_id = int(sample_token.split("/")[1].split(".")[0])
-            virtuallidar_to_camera_file = os.path.join(dair_root, "calib/virtuallidar_to_camera",    # Input!
-                                                       "{:06d}".format(sample_id) + ".json")
-            Tr_velo_to_cam, r_velo2cam, t_velo2cam = get_lidar2cam(virtuallidar_to_camera_file)
+            Tr_velo_to_cam = torch.linalg.inv(mats['sensor2ego_mats'][1]).squeeze().cpu().numpy()
             preds = results[sample_token]
             pred_lines = []
             bboxes = []
@@ -187,12 +183,6 @@ def main(args: Namespace) -> None:
 
                 w, l, h = dim[0], dim[1], dim[2]
                 x, y, z = loc[0], loc[1], loc[2]
-                bottom_center = [x, y, z]
-                obj_size = [l, w, h]
-                bottom_center_in_cam = r_velo2cam * np.matrix(bottom_center).T + t_velo2cam
-                _, yaw = get_camera_3d_8points(
-                    obj_size, yaw_lidar, bottom_center, bottom_center_in_cam, r_velo2cam, t_velo2cam
-                )
                 yaw = 0.5 * np.pi - yaw_lidar
 
                 cam_x, cam_y, cam_z = convert_point(np.array([x, y, z, 1]).T, Tr_velo_to_cam)
@@ -236,11 +226,11 @@ def main(args: Namespace) -> None:
         detection_path = os.path.join(results_path, "detections")
         if not os.path.exists(detection_path):
             os.mkdir(detection_path)
-        # cv2.imwrite(os.path.join(detection_path, f"{filename}_detection.jpg"), image)
-        cv2.imshow('Detection Results', image)
-        k = cv2.waitKey(0)
-        if k == 27:
-            cv2.destroyAllWindows()
+        cv2.imwrite(os.path.join(detection_path, f"{filename}_detection.jpg"), image)
+        # cv2.imshow('Detection Results', image)
+        # k = cv2.waitKey(0)
+        # if k == 27:
+        #     cv2.destroyAllWindows()
 
 
 def run_cli():
