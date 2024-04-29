@@ -24,12 +24,18 @@ from evaluators.result2kitti import *
 from scripts.data_converter.visual_utils import *
 from tqdm import tqdm
 from exps.dair_v2x.bev_height_lss_r101_864_1536_256x256_140 import BEVHeightLightningModel
+from dataset.nusc_mv_det_dataset import NuscMVDetDataset, img_transform
+from PIL import Image 
 
 
 # Questions:
 # 1. Solve the GPU out of memory problem
 # 2. Check how to set batch size
 # 3. Use customized dataset
+
+img_conf = dict(img_mean=[123.675, 116.28, 103.53],
+                img_std=[58.395, 57.12, 57.375],
+                to_rgb=True)
 
 data_root = "data/dair-v2x-i/"
 gt_label_path = "data/dair-v2x-i-kitti/training/label_2"
@@ -49,6 +55,31 @@ def main(args: Namespace) -> None:
 
     # Customize for CARLA images
     custom_img_name = 'carla01'
+
+    # =================================================================
+    # Read sweep_imgs
+    resize = 0.8
+    resize_dims = (1536, 864)
+    crop = (0, 0, 1536, 864)
+    flip = False
+    rotate_ida = 0
+    img_mean = np.array(img_conf['img_mean'])
+    img_std = np.array(img_conf['img_std'])
+    to_rgb = True
+
+    img1, ida_mat = img_transform(
+                        img1,
+                        resize=resize,
+                        resize_dims=resize_dims,
+                        crop=crop,
+                        flip=flip,
+                        rotate=rotate_ida,
+                    )
+    img1 = mmcv.imnormalize(np.array(img1), img_mean, img_std, to_rgb)
+    img1 = torch.from_numpy(img1).permute(2, 0, 1)
+
+    # =================================================================
+    # Set mats
     # The parameters of 'mats' are used in LSSFPN _forward_single_sweep
     # Transformation matrix from camera to ego
     mats['sensor2ego_mats'][1] = torch.tensor([[[[-0.0414, -0.2259,  0.9736, -0.1962],
@@ -81,13 +112,19 @@ def main(args: Namespace) -> None:
                                                      [ 7.3137e-04, -2.2407e-01,  9.7457e-01,  0.0000e+00],
                                                      [ 0.0000e+00,  0.0000e+00,  0.0000e+00,  1.0000e+00]]]])
 
+    # =================================================================
+    # Set img_metas
+
+    # =================================================================
+    # Set calib/virtuallidar_to_camera
+
 
     # img_metas[1]['token'] = f'image/{custom_img_name}.png'
 
     # Input:
-    # sweep_imgs
-    # mats
-    # img_metas
+    # sweep_imgs [Done!]
+    # mats []
+    # img_metas []
     # virtuallidar_to_camera (Why LiDAR?)
     with torch.no_grad():
         for key, value in mats.items():
